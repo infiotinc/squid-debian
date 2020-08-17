@@ -11,10 +11,12 @@
 #include "squid.h"
 #include "globals.h"
 #include "HttpRequest.h"
+#include "parser/Tokenizer.h"
 #include "rfc1738.h"
 #include "SquidConfig.h"
 #include "SquidString.h"
 #include "URL.h"
+#include "urn.h"
 
 static HttpRequest *urlParseFinish(const HttpRequestMethod& method,
                                    const AnyP::ProtocolType protocol,
@@ -23,7 +25,9 @@ static HttpRequest *urlParseFinish(const HttpRequestMethod& method,
                                    const char *const login,
                                    const int port,
                                    HttpRequest *request);
-static HttpRequest *urnParse(const HttpRequestMethod& method, char *urn, HttpRequest *request);
+
+static HttpRequest *parseUrn(const HttpRequestMethod &method, Parser::Tokenizer &tok, HttpRequest *request);
+
 static const char valid_hostname_chars_u[] =
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     "abcdefghijklmnopqrstuvwxyz"
@@ -36,6 +40,7 @@ static const char valid_hostname_chars[] =
     "0123456789-."
     "[:]"
     ;
+
 
 void
 urlInitialize(void)
@@ -82,12 +87,54 @@ urlInitialize(void)
 }
 
 /**
+ * Extract the URI scheme and ':' delimiter from the given input buffer.
+ *
+ * Schemes up to 16 characters are accepted.
+ *
+ * Governed by RFC 3986 section 3.1
+ */
+static AnyP::UriScheme
+uriParseScheme(Parser::Tokenizer &tok)
+{
+    /*
+     * RFC 3986 section 3.1 paragraph 2:
+     *
+     * Scheme names consist of a sequence of characters beginning with a
+     * letter and followed by any combination of letters, digits, plus
+     * ("+"), period ("."), or hyphen ("-").
+     *
+     * The underscore ("_") required to match "cache_object://" squid
+     * special URI scheme.
+     */
+    static const auto schemeChars =
+#if USE_HTTP_VIOLATIONS
+        CharacterSet("special", "_") +
+#endif
+        CharacterSet("scheme", "+.-") + CharacterSet::ALPHA + CharacterSet::DIGIT;
+
+    SBuf str;
+    if (tok.prefix(str, schemeChars, 16) && tok.skip(':') && CharacterSet::ALPHA[str.at(0)]) {
+        // const auto protocol = AnyP::UriScheme::FindProtocolType(str);
+        const auto protocol = urlParseProtocol(str);
+        if (protocol == AnyP::PROTO_UNKNOWN) {
+            // return AnyP::UriScheme(protocol, str.c_str());
+            throw TextException("Unknown protocol", __FILE__, __LINE__);
+        }
+        return AnyP::UriScheme(protocol);
+    }
+
+    throw TextException("invalid URI scheme", __FILE__, __LINE__);
+}
+
+
+/**
  * urlParseProtocol() takes begin (b) and end (e) pointers, but for
  * backwards compatibility, e defaults to NULL, in which case we
  * assume b is NULL-terminated.
  */
+
 AnyP::ProtocolType
-urlParseProtocol(const char *b, const char *e)
+urlParseProtocol(const SBuf & protocol) //const char *b, const char *e)
 {
     /*
      * if e is NULL, b must be NULL terminated and we
@@ -95,10 +142,8 @@ urlParseProtocol(const char *b, const char *e)
      * after b.
      */
 
-    if (NULL == e)
-        e = b + strcspn(b, ":");
-
-    int len = e - b;
+    auto len = protocol.length();
+    auto b = protocol.rawContent();
 
     /* test common stuff first */
 
@@ -175,6 +220,37 @@ urlDefaultPort(AnyP::ProtocolType p)
     }
 }
 
+/**
+ * Appends configured append_domain to hostname, assuming
+ * the given buffer is at least SQUIDHOSTNAMELEN bytes long,
+ * and that the host FQDN is not a 'dotless' TLD.
+ *
+ * \returns false if and only if there is not enough space to append
+ */
+bool
+urlAppendDomain(char *host)
+{
+    /* For IPv4 addresses check for a dot */
+    /* For IPv6 addresses also check for a colon */
+    if (Config.appendDomain && !strchr(host, '.') && !strchr(host, ':')) {
+        const uint64_t dlen = strlen(host);
+        const uint64_t want = dlen + Config.appendDomainLen;
+        if (want > SQUIDHOSTNAMELEN - 1) {
+            debugs(23, 2, "URL domain too large (" << dlen << " bytes)");
+            return false;
+        }
+        strncat(host, Config.appendDomain, SQUIDHOSTNAMELEN - dlen - 1);
+    }
+    return true;
+}
+
+static const SBuf &
+Asterisk()
+{
+    static SBuf star("*");
+    return star;
+}
+
 /*
  * Parse a URI/URL.
  *
@@ -197,59 +273,71 @@ urlDefaultPort(AnyP::ProtocolType p)
  * being "end of host with implied path of /".
  */
 HttpRequest *
-urlParse(const HttpRequestMethod& method, char *url, HttpRequest *request)
+urlParse(const HttpRequestMethod& method, const SBuf &rawUrl, HttpRequest *request)
 {
-    LOCAL_ARRAY(char, proto, MAX_URL);
+	try {
+
     LOCAL_ARRAY(char, login, MAX_URL);
     LOCAL_ARRAY(char, host, MAX_URL);
     LOCAL_ARRAY(char, urlpath, MAX_URL);
     char *t = NULL;
     char *q = NULL;
     int port;
-    AnyP::ProtocolType protocol = AnyP::PROTO_NONE;
     int l;
     int i;
     const char *src;
     char *dst;
-    proto[0] = host[0] = urlpath[0] = login[0] = '\0';
+    host[0] = urlpath[0] = login[0] = '\0';
 
-    if ((l = strlen(url)) + Config.appendDomainLen > (MAX_URL - 1)) {
-        /* terminate so it doesn't overflow other buffers */
-        *(url + (MAX_URL >> 1)) = '\0';
+	if ((l = rawUrl.length()) + Config.appendDomainLen > (MAX_URL - 1)) {
         debugs(23, DBG_IMPORTANT, "urlParse: URL too large (" << l << " bytes)");
         return NULL;
     }
+
+    if ((method == Http::METHOD_OPTIONS || method == Http::METHOD_TRACE) &&
+               Asterisk().cmp(rawUrl) == 0) {
+        // XXX: these methods might also occur in HTTPS traffic. Handle this better.
+        port = urlDefaultPort(AnyP::PROTO_HTTP);
+
+        const SBuf& h = Asterisk();
+        return urlParseFinish(method, AnyP::PROTO_HTTP, h.rawContent(), host, login, port, request);
+    }
+
+    Parser::Tokenizer tok(rawUrl);
+    AnyP::UriScheme scheme;
+
     if (method == Http::METHOD_CONNECT) {
         port = CONNECT_PORT;
+
+        // XXX: use tokenizer
+        auto B = tok.buf();
+        const char *url = B.c_str();
 
         if (sscanf(url, "[%[^]]]:%d", host, &port) < 1)
             if (sscanf(url, "%[^:]:%d", host, &port) < 1)
                 return NULL;
 
-    } else if ((method == Http::METHOD_OPTIONS || method == Http::METHOD_TRACE) &&
-               strcmp(url, "*") == 0) {
-        protocol = AnyP::PROTO_HTTP;
-        port = urlDefaultPort(protocol);
-        return urlParseFinish(method, protocol, url, host, login, port, request);
-    } else if (!strncmp(url, "urn:", 4)) {
-        return urnParse(method, url, request);
     } else {
-        /* Parse the URL: */
-        src = url;
-        i = 0;
-        /* Find first : - everything before is protocol */
-        for (i = 0, dst = proto; i < l && *src != ':'; ++i, ++src, ++dst) {
-            *dst = *src;
-        }
-        if (i >= l)
-            return NULL;
-        *dst = '\0';
+        scheme = uriParseScheme(tok);
 
-        /* Then its :// */
-        if ((i+3) > l || *src != ':' || *(src + 1) != '/' || *(src + 2) != '/')
-            return NULL;
-        i += 3;
-        src += 3;
+        if (scheme == AnyP::PROTO_NONE)
+            return NULL; // invalid scheme
+
+        if (scheme == AnyP::PROTO_URN) {
+            return parseUrn(method, tok, request); // throws on any error
+        }
+
+		// URLs then have "//"
+		static const SBuf doubleSlash("//");
+        if (!tok.skip(doubleSlash))
+			return NULL;
+
+		auto B = tok.remaining();
+		const char *url = B.c_str();
+
+		/* Parse the URL: */
+		src = url;
+		i = 0;
 
         /* Then everything until first /; thats host (and port; which we'll look for here later) */
         // bug 1881: If we don't get a "/" then we imply it was there
@@ -290,8 +378,8 @@ urlParse(const HttpRequestMethod& method, char *url, HttpRequest *request)
         }
         *dst = '\0';
 
-        protocol = urlParseProtocol(proto);
-        port = urlDefaultPort(protocol);
+		// port = scheme.defaultPort(); // may be reset later
+        port = urlDefaultPort(scheme);
 
         /* Is there any login information? (we should eventually parse it above) */
         t = strrchr(host, '@');
@@ -339,7 +427,7 @@ urlParse(const HttpRequestMethod& method, char *url, HttpRequest *request)
         }
 
         // Bug 3183 sanity check: If scheme is present, host must be too.
-        if (protocol != AnyP::PROTO_NONE && host[0] == '\0') {
+        if (scheme != AnyP::PROTO_NONE && host[0] == '\0') {
             debugs(23, DBG_IMPORTANT, "SECURITY ALERT: Missing hostname in URL '" << url << "'. see access.log for details.");
             return NULL;
         }
@@ -368,16 +456,15 @@ urlParse(const HttpRequestMethod& method, char *url, HttpRequest *request)
         }
     }
 
-    debugs(23, 3, "urlParse: Split URL '" << url << "' into proto='" << proto << "', host='" << host << "', port='" << port << "', path='" << urlpath << "'");
+    debugs(23, 3, "urlParse: Split URL '" << rawUrl << "' into proto='" << scheme << "', host='" << host << "', port='" << port << "', path='" << urlpath << "'");
 
     if (Config.onoff.check_hostnames && strspn(host, Config.onoff.allow_underscore ? valid_hostname_chars_u : valid_hostname_chars) != strlen(host)) {
         debugs(23, DBG_IMPORTANT, "urlParse: Illegal character in hostname '" << host << "'");
         return NULL;
     }
 
-    /* For IPV6 addresses also check for a colon */
-    if (Config.appendDomain && !strchr(host, '.') && !strchr(host, ':'))
-        strncat(host, Config.appendDomain, SQUIDHOSTNAMELEN - strlen(host) - 1);
+    if (!urlAppendDomain(host))
+        return NULL;
 
     /* remove trailing dots from hostnames */
     while ((l = strlen(host)) > 0 && host[--l] == '.')
@@ -404,7 +491,7 @@ urlParse(const HttpRequestMethod& method, char *url, HttpRequest *request)
 #endif
 
     if (stringHasWhitespace(urlpath)) {
-        debugs(23, 2, "urlParse: URI has whitespace: {" << url << "}");
+        debugs(23, 2, "urlParse: URI has whitespace: {" << rawUrl << "}");
 
         switch (Config.uri_whitespace) {
 
@@ -437,7 +524,12 @@ urlParse(const HttpRequestMethod& method, char *url, HttpRequest *request)
         }
     }
 
-    return urlParseFinish(method, protocol, urlpath, host, login, port, request);
+    return urlParseFinish(method, scheme, urlpath, host, login, port, request);
+
+	} catch (...) {
+		debugs(23, 2, "error: " << CurrentException << " " << Raw("rawUrl", rawUrl.rawContent(), rawUrl.length()));
+	}
+	return NULL;
 }
 
 /**
@@ -467,6 +559,51 @@ urlParseFinish(const HttpRequestMethod& method,
     return request;
 }
 
+/**
+ * Governed by RFC 8141 section 2:
+ *
+ *  assigned-name = "urn" ":" NID ":" NSS
+ *  NID           = (alphanum) 0*30(ldh) (alphanum)
+ *  ldh           = alphanum / "-"
+ *  NSS           = pchar *(pchar / "/")
+ *
+ * RFC 3986 Appendix D.2 defines (as deprecated):
+ *
+ *   alphanum     = ALPHA / DIGIT
+ *
+ * Notice that NID is exactly 2-32 characters in length.
+ */
+static HttpRequest*
+parseUrn(const HttpRequestMethod &method, Parser::Tokenizer &tok, HttpRequest *request)
+{
+    static const auto nidChars = CharacterSet("NID","-") + CharacterSet::ALPHA + CharacterSet::DIGIT;
+    static const auto alphanum = (CharacterSet::ALPHA + CharacterSet::DIGIT).rename("alphanum");
+    SBuf nid;
+    if (!tok.prefix(nid, nidChars, 32))
+        throw TextException("NID not found", __FILE__, __LINE__);
+
+    if (!tok.skip(':'))
+        throw TextException("NID too long or missing ':' delimiter", __FILE__, __LINE__);
+
+    if (nid.length() < 2)
+        throw TextException("NID too short", __FILE__, __LINE__);
+
+    if (!alphanum[nid[0]])
+        throw TextException("NID prefix is not alphanumeric", __FILE__, __LINE__);
+
+    if (!alphanum[nid[nid.length()-1]])
+        throw TextException("NID suffix is not alphanumeric", __FILE__, __LINE__);
+
+    nid.append(':').append(tok.remaining());
+    if (request) {
+        request->initHTTP(method, AnyP::PROTO_URN, nid.rawContent());
+        safe_free(request->canonical);
+        return request;
+    }
+    return new HttpRequest(method, AnyP::PROTO_URN, nid.rawContent());
+}
+
+/*
 static HttpRequest *
 urnParse(const HttpRequestMethod& method, char *urn, HttpRequest *request)
 {
@@ -478,7 +615,7 @@ urnParse(const HttpRequestMethod& method, char *urn, HttpRequest *request)
     }
 
     return new HttpRequest(method, AnyP::PROTO_URN, urn + 4);
-}
+}*/
 
 const char *
 urlCanonical(HttpRequest * request)
@@ -650,26 +787,32 @@ urlMakeAbsolute(const HttpRequest * req, const char *relUrl)
     char *urlbuf = (char *)xmalloc(MAX_URL * sizeof(char));
 
     if (req->url.getScheme() == AnyP::PROTO_URN) {
-        snprintf(urlbuf, MAX_URL, "urn:" SQUIDSTRINGPH,
+        snprintf(urlbuf, MAX_URL, "urn:%s:" SQUIDSTRINGPH,
+                 req->GetHost(),
                  SQUIDSTRINGPRINT(req->urlpath));
         return (urlbuf);
     }
 
     size_t urllen;
+    const bool allowUserInfo = req->url.getScheme() == AnyP::PROTO_FTP ||
+                               req->url.getScheme() == AnyP::PROTO_UNKNOWN;
+    const char *login_data = "";
+    if (allowUserInfo && *req->login)
+        login_data = req->login;
 
     if (req->port != urlDefaultPort(req->url.getScheme())) {
         urllen = snprintf(urlbuf, MAX_URL, "%s://%s%s%s:%d",
                           req->url.getScheme().c_str(),
-                          req->login,
-                          *req->login ? "@" : null_string,
+                          login_data,
+                          *login_data ? "@" : null_string,
                           req->GetHost(),
                           req->port
                          );
     } else {
         urllen = snprintf(urlbuf, MAX_URL, "%s://%s%s%s",
                           req->url.getScheme().c_str(),
-                          req->login,
-                          *req->login ? "@" : null_string,
+                          login_data,
+                          *login_data ? "@" : null_string,
                           req->GetHost()
                          );
     }

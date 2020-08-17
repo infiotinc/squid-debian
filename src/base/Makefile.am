@@ -22,6 +22,8 @@ libbase_la_SOURCES = \
 	CharacterSet.h \
 	CharacterSet.cc \
 	CbcPointer.h \
+	Here.h \
+	Here.cc \
 	InstanceId.h \
 	Lock.h \
 	LruMap.h \

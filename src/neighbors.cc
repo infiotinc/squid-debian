@@ -1398,7 +1398,7 @@ peerCountMcastPeersStart(void *data)
     p->in_addr.toUrl(url+7, MAX_URL -8 );
     strcat(url, "/");
     fake = storeCreateEntry(url, url, RequestFlags(), Http::METHOD_GET);
-    HttpRequest *req = HttpRequest::CreateFromUrl(url);
+    HttpRequest *req = HttpRequest::CreateFromUrl(SBuf(url));
     psstate = new ps_state;
     psstate->request = req;
     HTTPMSGLOCK(psstate->request);

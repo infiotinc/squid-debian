@@ -181,7 +181,7 @@ am__v_lt_0 = --silent
 am__v_lt_1 = 
 libmiscencoding_la_LIBADD =
 am_libmiscencoding_la_OBJECTS = base64.lo charset.lo html_quote.lo \
-	md5.lo rfc1738.lo rfc2617.lo uudecode.lo
+	md5.lo rfc1738.lo rfc2617.lo
 libmiscencoding_la_OBJECTS = $(am_libmiscencoding_la_OBJECTS)
 libmiscutil_la_LIBADD =
 am_libmiscutil_la_OBJECTS = MemPool.lo MemPoolChunked.lo \
@@ -810,8 +810,7 @@ libmiscencoding_la_SOURCES = \
 	html_quote.c \
 	md5.c \
 	rfc1738.c \
-	rfc2617.c \
-	uudecode.c
+	rfc2617.c
 
 libmisccontainers_la_SOURCES = \
 	hash.cc
@@ -973,7 +972,6 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/sspwin32.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/stub_memaccount.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/util.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/uudecode.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/xusleep.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@tests/$(DEPDIR)/testRFC1035.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@tests/$(DEPDIR)/testRFC1738.Po@am__quote@

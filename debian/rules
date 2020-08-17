@@ -2,13 +2,16 @@
 
 export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 export DEB_CFLAGS_MAINT_APPEND = -Wall
+# see https://launchpad.net/bugs/1712668
+export DEB_CXXFLAGS_MAINT_APPEND = -Wno-error=deprecated -Wno-error=format-truncation
 export DEB_LDFLAGS_MAINT_APPEND = -Wl,--as-needed
 include /usr/share/dpkg/buildflags.mk
 
 include /usr/share/cdbs/1/rules/debhelper.mk
 include /usr/share/cdbs/1/class/autotools.mk
 include /usr/share/dpkg/architecture.mk
- 
+include /usr/share/cdbs/1/rules/autoreconf.mk
+
 INSTALLDIR := $(CURDIR)/debian/tmp
 datadir=/usr/share/squid
 
@@ -17,8 +20,6 @@ DEB_INSTALL_DOCS_squid-common := CONTRIBUTORS CREDITS QUICKSTART RELEASENOTES.ht
 						SPONSORS 
 
 DEB_CONFIGURE_EXTRA_FLAGS := BUILDCXXFLAGS="$(CXXFLAGS) $(CPPFLAGS) $(LDFLAGS)" \
-		CXX="g++-6" \
-		CC="gcc-6" \
 		--datadir=/usr/share/squid \
 		--sysconfdir=/etc/squid \
 		--libexecdir=/usr/lib/squid \
@@ -43,6 +44,7 @@ DEB_CONFIGURE_EXTRA_FLAGS := BUILDCXXFLAGS="$(CXXFLAGS) $(CPPFLAGS) $(LDFLAGS)" 
 		--enable-icmp \
 		--enable-zph-qos \
 		--enable-ecap \
+		--enable-ssl --enable-ssl-crtd --with-openssl \
 		--disable-translation \
 		--with-swapdir=/var/spool/squid \
 		--with-logdir=/var/log/squid \
@@ -85,6 +87,8 @@ install/squid::
 	install -m 755 -g root -d $(INSTALLDIR)/usr/share/man/man1
 	mv $(INSTALLDIR)/usr/bin/purge $(INSTALLDIR)/usr/bin/squid-purge
 	install -m 644 -g root debian/squid-purge.8  $(INSTALLDIR)/usr/share/man/man8
+	install -m 755 -g root -d $(INSTALLDIR)/etc/apparmor.d/force-complain
+	install -m 755 -g root -d $(INSTALLDIR)/etc/apparmor.d/disable
 
 clean::
 	# nothing to do

@@ -224,9 +224,9 @@ public:
 
     static void httpRequestPack(void *obj, Packer *p);
 
-    static HttpRequest * CreateFromUrlAndMethod(char * url, const HttpRequestMethod& method);
+    static HttpRequest * CreateFromUrlAndMethod(const SBuf & url, const HttpRequestMethod& method);
 
-    static HttpRequest * CreateFromUrl(char * url);
+    static HttpRequest * CreateFromUrl(const SBuf & url);
 
     ConnStateData *pinnedConnection();
 

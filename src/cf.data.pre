@@ -1213,11 +1213,11 @@ NOCOMMENT_START
 # Example rule allowing access from your local networks.
 # Adapt to list your (internal) IP networks from where browsing
 # should be allowed
-acl localnet src 10.0.0.0/8	# RFC1918 possible internal network
-acl localnet src 172.16.0.0/12	# RFC1918 possible internal network
-acl localnet src 192.168.0.0/16	# RFC1918 possible internal network
-acl localnet src fc00::/7       # RFC 4193 local private network range
-acl localnet src fe80::/10      # RFC 4291 link-local (directly plugged) machines
+#acl localnet src 10.0.0.0/8	# RFC1918 possible internal network
+#acl localnet src 172.16.0.0/12	# RFC1918 possible internal network
+#acl localnet src 192.168.0.0/16	# RFC1918 possible internal network
+#acl localnet src fc00::/7       # RFC 4193 local private network range
+#acl localnet src fe80::/10      # RFC 4291 link-local (directly plugged) machines
 
 acl SSL_ports port 443
 acl Safe_ports port 80		# http
@@ -1466,7 +1466,7 @@ http_access deny manager
 # Example rule allowing access from your local networks.
 # Adapt localnet in the ACL section to list your (internal) IP networks
 # from where browsing should be allowed
-http_access allow localnet
+#http_access allow localnet
 http_access allow localhost
 
 # And finally deny all other access to this proxy
@@ -3260,6 +3260,19 @@ DOC_START
 			If 'sslkey' is not specified 'sslcert' is assumed to
 			reference a combined file containing both the
 			certificate and the key.
+
+	Notes:
+	
+	On Debian/Ubuntu systems a default snakeoil certificate is
+    available in /etc/ssl and users can set:
+
+		cert=/etc/ssl/certs/ssl-cert-snakeoil.pem
+
+	and
+
+		key=/etc/ssl/private/ssl-cert-snakeoil.key
+
+	for testing.
 	
 	sslversion=1|2|3|4|5|6
 			The SSL version to use when connecting to this peer
@@ -4607,7 +4620,7 @@ DOC_END
 
 NAME: logfile_rotate
 TYPE: int
-DEFAULT: 10
+DEFAULT: 0
 LOC: Config.Log.rotateNumber
 DOC_START
 	Specifies the number of logfile rotations to make when you
@@ -4626,6 +4639,9 @@ DOC_START
 
 	Note, from Squid-3.1 this option is only a default for cache.log,
 	that log can be rotated separately by using debug_options.
+
+	Note2, for Debian/Linux the default of logfile_rotate is
+	zero, since it includes external logfile-rotation methods.
 DOC_END
 
 NAME: mime_table
@@ -5506,6 +5522,9 @@ NOCOMMENT_START
 refresh_pattern ^ftp:		1440	20%	10080
 refresh_pattern ^gopher:	1440	0%	1440
 refresh_pattern -i (/cgi-bin/|\?) 0	0%	0
+refresh_pattern (Release|Packages(.gz)*)$      0       20%     2880
+# example lin deb packages
+#refresh_pattern (\.deb|\.udeb)$   129600 100% 129600
 refresh_pattern .		0	20%	4320
 NOCOMMENT_END
 DOC_END
@@ -8984,8 +9003,8 @@ DOC_START
 
 	WARNING:
 	  This option will restrict the situations under which IPv6
-	  connectivity is used (and tested). Hiding network problems
-	  which would otherwise be detected and warned about.
+	  connectivity is used (and tested), potentially hiding network
+	  problems which would otherwise be detected and warned about.
 DOC_END
 
 NAME: ipcache_size

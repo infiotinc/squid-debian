@@ -19,6 +19,7 @@
 #include "auth/basic/UserRequest.h"
 #include "auth/Gadgets.h"
 #include "auth/State.h"
+#include "base64.h"
 #include "cache_cf.h"
 #include "charset.h"
 #include "helper.h"
@@ -28,7 +29,6 @@
 #include "rfc1738.h"
 #include "SquidTime.h"
 #include "Store.h"
-#include "uudecode.h"
 #include "wordlist.h"
 
 /* Basic Scheme */
@@ -166,21 +166,25 @@ Auth::Basic::Config::decodeCleartext(const char *httpAuthHeader)
     // XXX: really? is the \n actually still there? does the header parse not drop it?
     char *eek = xstrdup(proxy_auth);
     strtok(eek, "\n");
-    char *cleartext = uudecode(eek);
-    safe_free(eek);
 
-    if (cleartext) {
-        /*
-         * Don't allow NL or CR in the credentials.
-         * Oezguer Kesim <oec@codeblau.de>
-         */
-        debugs(29, 9, HERE << "'" << cleartext << "'");
+    const int dstLen = base64_decode_len(eek);
+    char *cleartext = (char*)xmalloc(dstLen+1);
 
-        if (strcspn(cleartext, "\r\n") != strlen(cleartext)) {
-            debugs(29, DBG_IMPORTANT, "WARNING: Bad characters in authorization header '" << httpAuthHeader << "'");
-            safe_free(cleartext);
-        }
+    const int decodedLen = base64_decode(cleartext, dstLen, eek);
+    cleartext[decodedLen] = '\0';
+
+    /*
+     * Don't allow NL or CR in the credentials.
+     * Oezguer Kesim <oec@codeblau.de>
+     */
+    debugs(29, 9, HERE << "'" << cleartext << "'");
+
+    if (strcspn(cleartext, "\r\n") != strlen(cleartext)) {
+        debugs(29, DBG_IMPORTANT, "WARNING: Bad characters in authorization header '" << httpAuthHeader << "'");
+        safe_free(cleartext);
     }
+
+    safe_free(eek);
     return cleartext;
 }
 

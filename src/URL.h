@@ -62,9 +62,9 @@ MEMPROXY_CLASS_INLINE(URL);
 class HttpRequest;
 class HttpRequestMethod;
 
-AnyP::ProtocolType urlParseProtocol(const char *, const char *e = NULL);
+AnyP::ProtocolType urlParseProtocol(const SBuf &);
 void urlInitialize(void);
-HttpRequest *urlParse(const HttpRequestMethod&, char *, HttpRequest *request = NULL);
+HttpRequest *urlParse(const HttpRequestMethod&, const SBuf & rawRequest, HttpRequest *request = NULL);
 const char *urlCanonical(HttpRequest *);
 char *urlCanonicalClean(const HttpRequest *);
 const char *urlCanonicalFakeHttps(const HttpRequest * request);
@@ -115,6 +115,7 @@ enum MatchDomainNameFlags {
 int matchDomainName(const char *host, const char *domain, uint flags = mdnNone);
 int urlCheckRequest(const HttpRequest *);
 int urlDefaultPort(AnyP::ProtocolType p);
+bool urlAppendDomain(char *host);
 char *urlHostname(const char *url);
 void urlExtMethodConfigure(void);
 

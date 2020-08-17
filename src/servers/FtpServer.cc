@@ -721,12 +721,10 @@ Ftp::Server::parseOneRequest(Http::ProtocolVersion &ver)
     const SBuf *path = (params.length() && CommandHasPathParameter(cmd)) ?
                        &params : NULL;
     calcUri(path);
-    char *newUri = xstrdup(uri.c_str());
-    HttpRequest *const request = HttpRequest::CreateFromUrlAndMethod(newUri, method);
+    HttpRequest *const request = HttpRequest::CreateFromUrlAndMethod(uri, method);
     if (!request) {
         debugs(33, 5, "Invalid FTP URL: " << uri);
         uri.clear();
-        safe_free(newUri);
         return earlyError(eekInvalidUri);
     }
 
@@ -749,7 +747,7 @@ Ftp::Server::parseOneRequest(Http::ProtocolVersion &ver)
     http->request = request;
     HTTPMSGLOCK(http->request);
     http->req_sz = tok.parsedSize();
-    http->uri = newUri;
+    http->uri = xstrdup(uri.c_str());
 
     ClientSocketContext *const result =
         new ClientSocketContext(clientConnection, http);

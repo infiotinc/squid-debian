@@ -187,7 +187,7 @@ class HttpHeaderEntry
 public:
     HttpHeaderEntry(http_hdr_type id, const char *name, const char *value);
     ~HttpHeaderEntry();
-    static HttpHeaderEntry *parse(const char *field_start, const char *field_end);
+    static HttpHeaderEntry *parse(const char *field_start, const char *field_end, const http_hdr_owner_type msgType);
     HttpHeaderEntry *clone() const;
     void packInto(Packer *p) const;
     int getInt() const;

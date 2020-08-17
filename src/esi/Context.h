@@ -12,6 +12,7 @@
 #include "clientStream.h"
 #include "err_type.h"
 #include "esi/Element.h"
+#include "esi/Esi.h"
 #include "esi/Parser.h"
 #include "http/StatusCode.h"
 #include "HttpReply.h"
@@ -112,7 +113,7 @@ public:
     {
 
     public:
-        ESIElement::Pointer stack[10]; /* a stack of esi elements that are open */
+        ESIElement::Pointer stack[ESI_STACK_DEPTH_LIMIT]; /* a stack of esi elements that are open */
         int stackdepth; /* self explanatory */
         ESIParser::Pointer theParser;
         ESIElement::Pointer top();
