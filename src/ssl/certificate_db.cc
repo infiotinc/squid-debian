@@ -22,6 +22,7 @@
 #include <fcntl.h>
 #endif
 
+#define Here __FILE__, __LINE__
 #define HERE "(ssl_crtd) " << __FILE__ << ':' << __LINE__ << ": "
 
 Ssl::Lock::Lock(std::string const &aFilename) :

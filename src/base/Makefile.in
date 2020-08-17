@@ -160,7 +160,7 @@ CONFIG_CLEAN_VPATH_FILES =
 LTLIBRARIES = $(noinst_LTLIBRARIES)
 libbase_la_LIBADD =
 am_libbase_la_OBJECTS = AsyncCall.lo AsyncJob.lo AsyncCallQueue.lo \
-	CharacterSet.lo RunnersRegistry.lo TextException.lo
+	CharacterSet.lo RunnersRegistry.lo TextException.lo Here.lo
 libbase_la_OBJECTS = $(am_libbase_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
@@ -705,6 +705,8 @@ libbase_la_SOURCES = \
 	CharacterSet.h \
 	CharacterSet.cc \
 	CbcPointer.h \
+	Here.h \
+	Here.cc \
 	InstanceId.h \
 	Lock.h \
 	LruMap.h \

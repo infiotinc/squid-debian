@@ -320,13 +320,7 @@ HttpRequest::parseFirstLine(const char *start, const char *end)
     if (end < start)   // missing URI
         return false;
 
-    char save = *end;
-
-    * (char *) end = '\0';     // temp terminate URI, XXX dangerous?
-
-    HttpRequest *tmp = urlParse(method, (char *) start, this);
-
-    * (char *) end = save;
+    HttpRequest *tmp = urlParse(method, SBuf(start, size_t(end-start)), this);
 
     if (NULL == tmp)
         return false;
@@ -540,7 +534,7 @@ HttpRequest::expectingBody(const HttpRequestMethod& unused, int64_t& theSize) co
  * If the request cannot be created cleanly, NULL is returned
  */
 HttpRequest *
-HttpRequest::CreateFromUrlAndMethod(char * url, const HttpRequestMethod& method)
+HttpRequest::CreateFromUrlAndMethod(const SBuf & url, const HttpRequestMethod& method)
 {
     return urlParse(method, url, NULL);
 }
@@ -551,7 +545,7 @@ HttpRequest::CreateFromUrlAndMethod(char * url, const HttpRequestMethod& method)
  * If the request cannot be created cleanly, NULL is returned
  */
 HttpRequest *
-HttpRequest::CreateFromUrl(char * url)
+HttpRequest::CreateFromUrl(const SBuf & url)
 {
     return urlParse(Http::METHOD_GET, url, NULL);
 }

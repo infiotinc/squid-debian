@@ -325,7 +325,7 @@ clientBeginRequest(const HttpRequestMethod& method, char const *url, CSCB * stre
     http->uri = (char *)xcalloc(url_sz, 1);
     strcpy(http->uri, url);
 
-    if ((request = HttpRequest::CreateFromUrlAndMethod(http->uri, method)) == NULL) {
+    if ((request = HttpRequest::CreateFromUrlAndMethod(SBuf(http->uri), method)) == NULL) {
         debugs(85, 5, "Invalid URL: " << http->uri);
         return -1;
     }
@@ -488,9 +488,9 @@ clientFollowXForwardedForCheck(allow_t answer, void *data)
         * Ensure that the access log shows the indirect client
         * instead of the direct client.
         */
-        ConnStateData *conn = http->getConn();
-        conn->log_addr = request->indirect_client_addr;
-        http->al->cache.caddr = conn->log_addr;
+        http->al->cache.caddr = request->indirect_client_addr;
+        if (ConnStateData *conn = http->getConn())
+            conn->log_addr = request->indirect_client_addr;
     }
     request->x_forwarded_for_iterator.clean();
     request->flags.done_follow_x_forwarded_for = true;
@@ -533,6 +533,7 @@ ClientRequestContext::hostHeaderIpVerify(const ipcache_addrs* ia, const DnsLooku
     }
     debugs(85, 3, HERE << "FAIL: validate IP " << clientConn->local << " possible from Host:");
     hostHeaderVerifyFailed("local IP", "any domain IP");
+
 }
 
 void
@@ -1282,7 +1283,7 @@ ClientRequestContext::clientRedirectDone(const Helper::Reply &reply)
                 // XXX: validate the URL properly *without* generating a whole new request object right here.
                 // XXX: the clone() should be done only AFTER we know the new URL is valid.
                 HttpRequest *new_request = old_request->clone();
-                if (urlParse(old_request->method, const_cast<char*>(urlNote), new_request)) {
+                if (urlParse(old_request->method, SBuf(urlNote), new_request)) {
                     debugs(61,2, HERE << "URL-rewriter diverts URL from " << urlCanonical(old_request) << " to " << urlCanonical(new_request));
 
                     // update the new request to flag the re-writing was done on it

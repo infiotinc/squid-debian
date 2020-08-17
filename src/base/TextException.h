@@ -12,6 +12,7 @@
 // Origin: xstd/TextException
 
 #include <exception>
+#include "base/Here.h"
 
 static unsigned int FileNameHashCached(const char *fname);
 
@@ -48,6 +49,10 @@ protected:
 
     friend unsigned int FileNameHashCached(const char *fname);
 };
+
+/// prints active (i.e., thrown but not yet handled) exception
+std::ostream &CurrentException(std::ostream &);
+
 
 //inline
 //ostream &operator <<(ostream &os, const TextException &exx) {
@@ -88,6 +93,17 @@ void Throw(const char *message, const char *fileName, int lineNo, unsigned int i
                       (void)Throw(#cond, __FILE__, __LINE__, \
                                   (FileNameHashCached(__FILE__)<<14) | (__LINE__ & 0x3FFF)))
 #endif
+
+/// Reports and swallows all exceptions to prevent compiler warnings and runtime
+/// errors related to throwing class destructors. Should be used for most dtors.
+#define SWALLOW_EXCEPTIONS(code) \
+    try { \
+        code \
+    } catch (...) { \
+        debugs(0, DBG_IMPORTANT, "BUG: ignoring exception;\n" << \
+               "    bug location: " << Here() << "\n" << \
+               "    ignored exception: " << CurrentException); \
+    }
 
 #endif /* SQUID__TEXTEXCEPTION_H */
 

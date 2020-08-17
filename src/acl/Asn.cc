@@ -240,7 +240,7 @@ asnCacheStart(int as)
     debugs(53, 3, "AS " << as);
     snprintf(asres, 4096, "whois://%s/!gAS%d", Config.as_whois_server, as);
     asState->as_number = as;
-    asState->request = HttpRequest::CreateFromUrl(asres);
+    asState->request = HttpRequest::CreateFromUrl(SBuf(asres));
     assert(asState->request != NULL);
 
     if ((e = storeGetPublic(asres, Http::METHOD_GET)) == NULL) {

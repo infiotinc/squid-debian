@@ -53,7 +53,7 @@ private:
 };
 
 /// convenience macro to pass source code location to Locker and others
-#define Here __FILE__, __LINE__
+//#define Here __FILE__, __LINE__
 
 /**
  * Database class for storing SSL certificates and their private keys.

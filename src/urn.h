@@ -16,5 +16,7 @@ class StoreEntry;
 
 void urnStart(HttpRequest *, StoreEntry *);
 
+std::ostream& CurrentException(std::ostream &os);
+
 #endif /* SQUID_URN_H_ */
 

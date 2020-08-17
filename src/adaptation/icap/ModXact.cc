@@ -1540,7 +1540,7 @@ void Adaptation::Icap::ModXact::encapsulateHead(MemBuf &icapBuf, const char *sec
     if (const HttpRequest* old_request = dynamic_cast<const HttpRequest*>(head)) {
         HttpRequest::Pointer new_request(new HttpRequest);
         Must(old_request->canonical);
-        urlParse(old_request->method, old_request->canonical, new_request.getRaw());
+        urlParse(old_request->method, SBuf(old_request->canonical), new_request.getRaw());
         new_request->http_ver = old_request->http_ver;
         headClone = new_request.getRaw();
     } else if (const HttpReply *old_reply = dynamic_cast<const HttpReply*>(head)) {
