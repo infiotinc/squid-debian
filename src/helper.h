@@ -51,6 +51,7 @@ public:
         int replies;
         int queue_size;
         int avg_svc_time;
+        int max_queue_size;
     } stats;
 
 private:

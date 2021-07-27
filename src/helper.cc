@@ -27,6 +27,7 @@
 #include "SquidTime.h"
 #include "Store.h"
 #include "wordlist.h"
+#include "SquidConfig.h"
 
 #define HELPER_MAX_ARGS 64
 
@@ -468,6 +469,8 @@ helperStats(StoreEntry * sentry, helper * hlp, const char *label)
                       hlp->stats.queue_size);
     storeAppendPrintf(sentry, "avg service time: %d msec\n",
                       hlp->stats.avg_svc_time);
+    storeAppendPrintf(sentry, "Max request length hit: %d requests\n",
+                      hlp->stats.max_queue_size);
     storeAppendPrintf(sentry, "\n");
     storeAppendPrintf(sentry, "%7s\t%7s\t%7s\t%11s\t%11s\t%s\t%7s\t%7s\t%7s\n",
                       "ID #",
@@ -1086,10 +1089,11 @@ Enqueue(helper * hlp, Helper::Request * r)
     hlp->last_queue_warn = squid_curtime;
 
     debugs(84, DBG_CRITICAL, "WARNING: All " << hlp->childs.n_active << "/" << hlp->childs.n_max << " " << hlp->id_name << " processes are busy.");
-    debugs(84, DBG_CRITICAL, "WARNING: " << hlp->stats.queue_size << " pending requests queued");
+    debugs(84, DBG_CRITICAL, "WARNING: " << hlp->stats.queue_size << " pending requests queued. Max allowed: " << Config.redirector_queue_threshold );
     debugs(84, DBG_CRITICAL, "WARNING: Consider increasing the number of " << hlp->id_name << " processes in your config file.");
 
-    if (hlp->stats.queue_size > (int)hlp->childs.n_running * 2)
+ // if (hlp->stats.queue_size > (int)hlp->childs.n_running * 2)
+    if (hlp->stats.queue_size > Config.redirector_queue_threshold)
         fatalf("Too many queued %s requests", hlp->id_name);
 }
 

@@ -293,14 +293,32 @@ redirectStart(ClientHttpRequest * http, HLPCB * handler, void *data)
     assert(http);
     assert(handler);
     debugs(61, 5, "redirectStart: '" << http->uri << "'");
+    debugs(61, 5, "redirectStart: queue_size: '" << redirectors->stats.queue_size << "'");
+    debugs(61, 5, "redirectStart: queue_threshold: '" << Config.redirector_queue_threshold << "'");
 
-    if (Config.onoff.redirector_bypass && redirectors->stats.queue_size) {
-        /* Skip redirector if there is one request queued */
+    // INFIOT: Track the max queue size, will help in tuning
+    if (redirectors->stats.queue_size > redirectors->stats.max_queue_size) {
+        redirectors->stats.max_queue_size = redirectors->stats.queue_size;
+    }
+    
+    /* INFIOT: Ensure that we skip URL filter if the number of requests queued up exceeds a
+       threshold. Current behaviour is binary, filter is skipped even if its just request thats
+       pending. Instead it should be a queue so that when the option to bypass is switched on,
+       we don't skip immediately.
+    */
+    if ((Config.onoff.redirector_bypass) &&
+                    (redirectors->stats.queue_size > Config.redirector_queue_threshold)) {
+        /* Skip redirector if there are more requests queued than configured threshold*/
         ++redirectorBypassed;
         Helper::Reply bypassReply;
         bypassReply.result = Helper::Okay;
         bypassReply.notes.add("message","URL rewrite/redirect queue too long. Bypassed.");
         handler(data, bypassReply);
+
+        debugs(61, DBG_CRITICAL, "Infiot filter. URI: " << http->uri << " Bypassed");
+        debugs(61, DBG_CRITICAL, "redirectStart: queue_size: '" << redirectors->stats.queue_size << "'");
+        debugs(61, DBG_CRITICAL, "redirectStart: queue_threshold: '" << Config.redirector_queue_threshold << "'");
+
         return;
     }
 
@@ -314,9 +332,9 @@ redirectStart(ClientHttpRequest * http, HLPCB * handler, void *data)
        (http->getConn()->port->name != NULL) && 
        ((strcmp(http->getConn()->port->name, INF_SQUID_HTTPS_TRANSPARENT_PROXY) == 0)))
      {
-        debugs(61, 5, HERE << "### NOT calling redirector ()" << "### URL NOT bumped: "
+        debugs(61, 5, HERE << "### NOT calling redirector for TCP inspection ()" << "### URL NOT bumped: "
                            << http->uri  << "Port: " << http->getConn()->port->name);
-        ++redirectorBypassed;
+        //++redirectorBypassed;
         Helper::Reply bypassReply;
         bypassReply.result = Helper::Okay;
         bypassReply.notes.add("message","Skipping HTTPS TCP connection details based URL filtering.");

@@ -5134,6 +5134,16 @@ DOC_START
 	be allowed to request.
 DOC_END
 
+NAME: url_rewrite_queue_threshold
+TYPE: int
+LOC: Config.redirector_queue_threshold
+DEFAULT: 5
+DOC_START
+	This is the number of total requests queued across all redirectors
+    before a request will bypass the redirector.
+DOC_END
+
+
 NAME: url_rewrite_extras
 TYPE: TokenOrQuotedString
 LOC: Config.redirector_extras

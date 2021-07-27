@@ -535,7 +535,7 @@ public:
         int v4_first;       ///< Place IPv4 first in the order of DNS results.
         ssize_t packet_max; ///< maximum size EDNS advertised for DNS replies.
     } dns;
-
+    int redirector_queue_threshold;
 };
 
 extern SquidConfig Config;
